@@ -17,8 +17,8 @@ import time
 
 INPUT_SIZE_X = 1920
 INPUT_SIZE_Y = 1080
-OUTPUT_SIZE_X = int(INPUT_SIZE_X * 0.8)
-OUTPUT_SIZE_Y = int(INPUT_SIZE_Y * 0.8)
+OUTPUT_SIZE_X = 1920 * 3
+OUTPUT_SIZE_Y = 1080
 
 import matplotlib.pyplot as plt
 
@@ -26,28 +26,35 @@ class image_converter:
 
   def __init__(self):
     self.bridge = CvBridge()
-    # self.image_sub0 = rospy.Subscriber("/IMX185_0/image_raw", Image, self.callback0)
-    # self.image_sub1 = rospy.Subscriber("/IMX185_1/image_raw", Image, self.callback1)
-    # self.image_sub2 = rospy.Subscriber("/IMX185_2/image_raw", Image, self.callback2)
+    self.image_sub0 = rospy.Subscriber("/IMX185_0/image_raw", Image, self.callback0)
+    self.image_sub1 = rospy.Subscriber("/IMX185_1/image_raw", Image, self.callback1)
+    self.image_sub2 = rospy.Subscriber("/IMX185_2/image_raw", Image, self.callback2)
 
     self.camera_info0 = rospy.Subscriber("/IMX185_0/camera_info", CameraInfo, self.camera_info_callback0)
     self.camera_info1 = rospy.Subscriber("/IMX185_1/camera_info", CameraInfo, self.camera_info_callback1)
     self.camera_info2 = rospy.Subscriber("/IMX185_2/camera_info", CameraInfo, self.camera_info_callback2)
+
+    self.res_img0 = np.zeros((OUTPUT_SIZE_Y, OUTPUT_SIZE_X, 3), dtype=np.uint8)
+    self.res_img1 = np.zeros((OUTPUT_SIZE_Y, OUTPUT_SIZE_X, 3), dtype=np.uint8)
+    self.res_img2 = np.zeros((OUTPUT_SIZE_Y, OUTPUT_SIZE_X, 3), dtype=np.uint8)
+
     self.projection_matrix0 = None
 
     self.mapx0 = None
     self.mapy0 = None
+    self.border0 = None
 
     self.mapx1 = None
     self.mapy1 = None
 
     self.mapx2 = None
     self.mapy2 = None
+    self.border2 = None
 
     self.projection_matrix1 = None
     self.projection_matrix2 = None
     self.projection_matrix_set = False
-    self.res_img = np.zeros((1080, 1920 * 3, 3), dtype=np.uint8)
+    # self.res_img = np.zeros((OUTPUT_SIZE_Y, OUTPUT_SIZE_X, 3), dtype=np.uint8)
     self.ready0 = False
     self.ready1 = False
     self.ready2 = False
@@ -70,7 +77,7 @@ class image_converter:
         # tic = time.time()
         # print(self.mapx0)
         # print(self.map)
-        res = cv2.remap(self.image0, self.mapx0, self.mapy0, cv2.INTER_LINEAR)
+        self.res_img0 = cv2.remap(self.image0, self.mapx0, self.mapy0, cv2.INTER_LINEAR)
         # toc = time.time()
         # print("time elapsed: ", toc - tic)
         # self.res_img[0:1080, 1920:3840] = res
@@ -81,12 +88,12 @@ class image_converter:
         #     coord = self.projection_matrix0[j, i]
         #     self.res_img[int(coord[1]), int(coord[0])] = self.image0[i, j]
 
-        cv2.imshow("adf", res)
-        cv2.waitKey(1)
-        #
-        # self.ready0 = True
-        # print("img0 is ready!")
-        # self.sem0.acquire()
+        # cv2.imshow("adf", res)
+        # cv2.waitKey(1)
+
+        self.ready0 = True
+        print("img0 is ready!")
+        self.sem0.acquire()
 
     except CvBridgeError as e:
       print(e)
@@ -96,11 +103,11 @@ class image_converter:
       # tic = time.time()
       self.image1 = self.bridge.imgmsg_to_cv2(data, "bgr8")
       if self.projection_matrix_set:
-        tic = time.time()
-        res = cv2.remap(self.image1, self.mapx1, self.mapy1, cv2.WARP_FILL_OUTLIERS, borderMode=cv2.BORDER_REFLECT101)
-        toc = time.time()
-        print("time elapsed: ", toc - tic)
-        self.res_img[0:1080, 3840:5760] = res
+        # tic = time.time()
+        self.res_img1 = cv2.remap(self.image1, self.mapx1, self.mapy1, cv2.INTER_LINEAR)
+        # toc = time.time()
+        # print("time elapsed: ", toc - tic)
+        # self.res_img[0:1080, 3840:5760] = res
         # print("time elapsed: ", time.time() - tic)
         # for i in range(1080):
         #   for j in range(1920):
@@ -118,18 +125,16 @@ class image_converter:
       # tic = time.time()
       self.image2 = self.bridge.imgmsg_to_cv2(data, "bgr8")
       if self.projection_matrix_set:
-        tic = time.time()
-        res = cv2.remap(self.image2, self.mapx2, self.mapy2, cv2.WARP_FILL_OUTLIERS, borderMode=cv2.BORDER_REPLICATE)
-        toc = time.time()
-        print("time elapsed: ", toc - tic)
-        self.res_img[0:1080, 0:1920] = res
+        # tic = time.time()
+        self.res_img2 = cv2.remap(self.image2, self.mapx2, self.mapy2, cv2.INTER_LINEAR)
+        # toc = time.time()
+        # print("time elapsed: ", toc - tic)
+        # self.res_img[0:1080, 0:1920] = res
         # print("time elapsed: ", time.time() - tic)
         # for i in range(1080):
         #   for j in range(1920):
         #     coord = self.projection_matrix2[j, i]
         #     self.res_img[int(coord[1]), int(coord[0])] = self.image2[i, j]
-
-
         self.ready2 = True
         print("img2 is ready!")
         self.sem2.acquire()
@@ -170,12 +175,14 @@ def main(args):
   # ic.projection_matrix0 = calculate_proj_mat(ic, 0)
   # ic.projection_matrix2 = calculate_proj_mat(ic, 2)
 
-  ic.mapx1, ic.mapy1 = calculate_proj_mat(ic, 1)
+  ic.mapx1, ic.mapy1, border4, _ = calculate_proj_mat(ic, 1)
   # tic = time.time()
-  ic.mapx0, ic.mapy0 = calculate_proj_mat(ic, 0)
+  ic.mapx0, ic.mapy0, border3, ic.border0 = calculate_proj_mat(ic, 0)
+  print(ic.border0)
   # toc = time.time()
   # print("time took: ", toc - tic)
-  ic.mapx2, ic.mapy2 = calculate_proj_mat(ic, 2)
+  ic.mapx2, ic.mapy2, _, ic.border2 = calculate_proj_mat(ic, 2)
+  print(ic.border2)
 
   # plt.plot(ic.projection_matrix2[:, 0], ic.projection_matrix2[:, 1], 'bo')
   # plt.plot(ic.projection_matrix0[:, 0], ic.projection_matrix0[:, 1], 'bo')
@@ -191,16 +198,29 @@ def main(args):
   # plt.show()
 
   # cv2.namedWindow("Image window", cv2.WINDOW_NORMAL)
-  # while(True):
-  #   if (ic.ready0 and ic.ready1 and ic.ready2):
-  #       ic.ready0 = False
-  #       ic.ready1 = False
-  #       ic.ready2 = False
-  #       cv2.imshow("Image window", ic.res_img)
-  #       cv2.waitKey(1)
-  #       ic.sem0.release()
-  #       ic.sem1.release()
-  #       ic.sem2.release()
+  while(True):
+    if (ic.ready0 and ic.ready1 and ic.ready2):
+        ic.ready0 = False
+        ic.ready1 = False
+        ic.ready2 = False
+        res_img = np.zeros_like(ic.res_img0)
+        e1 = (ic.border2 + border3)/2
+        e2 = (ic.border0 + border4)/2
+        res_img[:, :border3] = ic.res_img2[:, :border3]
+        res_img[:, border3:ic.border2] = ic.res_img2[:, border3:ic.border2] / 2 + ic.res_img0[:, border3:ic.border2] / 2
+        res_img[:, ic.border2:border4] = ic.res_img0[:, ic.border2:border4]
+        res_img[:, border4:ic.border0] = ic.res_img0[:, border4:ic.border0] / 2 + ic.res_img1[:, border4:ic.border0] / 2
+        res_img[:, ic.border0:] = ic.res_img1[:, ic.border0:]
+
+        # res_img[:, :e1] = ic.res_img2[:, :e1]
+        # res_img[:, e1:e2] = ic.res_img0[:, e1:e2]
+        # res_img[:, e2:] = ic.res_img1[:, e2:]
+        # res_img = (ic.res_img0 + ic.res_img1 + ic.res_img2)
+        cv2.imshow("Image window", res_img)
+        cv2.waitKey(1)
+        ic.sem0.release()
+        ic.sem1.release()
+        ic.sem2.release()
 
   try:
     rospy.spin()
@@ -230,68 +250,75 @@ def calculate_proj_mat(ic, k, delta = 0):
 
     # projection_matrix = np.zeros([1920, 1080, 2])
     # projection_matrix = np.zeros((1080*1920, 2), dtype=np.uint32)
-    mapx = np.zeros((1080, 1920), dtype=np.float32)
-    mapy = np.zeros((1080, 1920), dtype=np.float32)
-    shift = 0
-    if (k == 2):
-        shift = 2880
-    elif (k == 0):
-        shift = 960
-    else:
-        shift = -960
+    mapx = np.zeros((OUTPUT_SIZE_Y, OUTPUT_SIZE_X), dtype=np.float32)
+    mapy = np.zeros((OUTPUT_SIZE_Y, OUTPUT_SIZE_X), dtype=np.float32)
+
+    shift = 2000
+    # if (k == 2):
+    #     shift = 2880
+    # elif (k == 0):
+    #     shift = 960
+    # else:
+    #     shift = -960
 
     tic = time.time()
-    x = np.arange(0, 1920, 0.1)
+    x = np.arange(0, INPUT_SIZE_X, 0.1)
     x = [x]
-    x = np.array(np.repeat(x, 10800, axis=0))
+    x = np.array(np.repeat(x, INPUT_SIZE_Y * 10, axis=0))
     x = x.reshape(1, x.shape[0] * x.shape[1])
     # print("x: ", x)
     # print("x.shape: ", x.shape)
-    y = np.arange(0, 1080, 0.1)
-    y = np.repeat(y, 19200)
+    y = np.arange(0, INPUT_SIZE_Y, 0.1)
+    y = np.repeat(y, INPUT_SIZE_X * 10)
     y = y.reshape(1, y.shape[0])
     # print("y: ", y)
     # print("y.shape: ", y.shape)
-    xy = np.zeros((3, 19200 * 10800))
+    xy = np.zeros((3, INPUT_SIZE_Y * INPUT_SIZE_X * 100))
     xy[0] = x
     xy[1] = y
-    xy[2] = np.repeat(1, 19200 * 10800)
+    xy[2] = np.repeat(1, INPUT_SIZE_Y * INPUT_SIZE_X * 100)
     # print("Input mat xy: ", xy)
     toc = time.time()
     # print("creation time: ", toc - tic)
 
     tic = time.time()
     uvw = np.matmul(inv, xy)
-    uvw = np.array([uvw[2], -uvw[0], -uvw[1]])
-    uvw -= ic.tr_mat
-    res = np.matmul(rot_mat_inv, uvw)
+    uvw_axis_change = np.zeros_like(uvw)
+    uvw_axis_change[0] = uvw[2]
+    uvw_axis_change[1] = -uvw[0]
+    uvw_axis_change[2] = -uvw[1]
+    # uvw = np.array([uvw[2], -uvw[0], -uvw[1]])
+    uvw_axis_change -= ic.tr_mat
+    res = np.matmul(rot_mat_inv, uvw_axis_change)
     toc = time.time()
     # print("calc time 1: ", toc - tic)
 
     tic = time.time()
-    xs = -np.arctan2(res[1], res[0])# * 560 + shift
-    ys = -res[2]/np.sqrt((np.square(res[0]) + np.square(res[1])))# * 315 + 500
-    print("xs: ", xs)
-    print("ys: ", ys)
-    print("xs max: ", max(xs))
-    print("xs min: ", min(xs))
-    xs = np.clip(xs, 0, 1919)
-    ys = np.clip(ys, 0, 1079)
+    xs = -np.arctan2(res[1], res[0]) * 560 + shift
+    ys = -res[2]/np.sqrt((np.square(res[0]) + np.square(res[1]))) * 315 + 528
+    # print("xs: ", xs)
+    # print("ys: ", ys)
+    # print("xs max: ", max(xs))
+    # print("xs min: ", min(xs))
+    # print("ys max: ", max(ys))
+    # print("ys min: ", min(ys))
+    xs = np.clip(xs, 0, OUTPUT_SIZE_X - 1)
+    ys = np.clip(ys, 0, OUTPUT_SIZE_Y - 1)
     xs = np.around(xs)
     ys = np.around(ys)
     xs = xs.astype(np.int32)
     ys = ys.astype(np.int32)
-    # print("xs: ", xs)
-    # print("ys: ", ys)
+    print("xs: ", xs)
+    print("ys: ", ys)
     toc = time.time()
     # print("calc time 2: ", toc - tic)
 
     tic = time.time()
-    valsx = np.arange(19200*10800, dtype=np.float32)
-    valsy = np.arange(19200*10800, dtype=np.float32)
+    valsx = np.arange(INPUT_SIZE_Y * INPUT_SIZE_X * 100, dtype=np.float32)
+    valsy = np.arange(INPUT_SIZE_Y * INPUT_SIZE_X * 100, dtype=np.float32)
 
-    valsx = np.mod(valsx, 19200) / 10
-    valsy = np.floor_divide(valsy, 19200) / 10
+    valsx = np.mod(valsx, INPUT_SIZE_X * 10) / 10
+    valsy = np.floor_divide(valsy, INPUT_SIZE_X * 10) / 10
     mapx[ys, xs] = valsx
     mapy[ys, xs] = valsy
     toc = time.time()
@@ -354,7 +381,7 @@ def calculate_proj_mat(ic, k, delta = 0):
 
     print("projection_matrix " + str(k) + " is set!")
     # mapy, mapx = projection_matrix.transpose()
-    return mapx, mapy
+    return mapx, mapy, xs[0], xs[-1]
 
 
 def convert_point(x, y, w, h):
@@ -401,6 +428,10 @@ def convert_image(frame):
             new_frame[y, x] = val.astype(np.uint8)
     
     return new_frame
+
+def concatenate_images(img1, img2):
+    help_mat = (img1 == np.array([0,0,0]))
+
 
 if __name__ == '__main__':
     main(sys.argv)
