@@ -26,7 +26,7 @@ class image_converter:
 
   def __init__(self):
     self.bridge = CvBridge()
-    self.image_sub0 = rospy.Subscriber("/IMX185_0/image_raw", Image, self.callback0)
+    # self.image_sub0 = rospy.Subscriber("/IMX185_0/image_raw", Image, self.callback0)
     # self.image_sub1 = rospy.Subscriber("/IMX185_1/image_raw", Image, self.callback1)
     # self.image_sub2 = rospy.Subscriber("/IMX185_2/image_raw", Image, self.callback2)
 
@@ -170,9 +170,12 @@ def main(args):
   # ic.projection_matrix0 = calculate_proj_mat(ic, 0)
   # ic.projection_matrix2 = calculate_proj_mat(ic, 2)
 
-  # ic.mapx1, ic.mapy1 = calculate_proj_mat(ic, 1)
+  ic.mapx1, ic.mapy1 = calculate_proj_mat(ic, 1)
+  # tic = time.time()
   ic.mapx0, ic.mapy0 = calculate_proj_mat(ic, 0)
-  # ic.mapx2, ic.mapy2 = calculate_proj_mat(ic, 2)
+  # toc = time.time()
+  # print("time took: ", toc - tic)
+  ic.mapx2, ic.mapy2 = calculate_proj_mat(ic, 2)
 
   # plt.plot(ic.projection_matrix2[:, 0], ic.projection_matrix2[:, 1], 'bo')
   # plt.plot(ic.projection_matrix0[:, 0], ic.projection_matrix0[:, 1], 'bo')
@@ -222,8 +225,8 @@ def calculate_proj_mat(ic, k, delta = 0):
     inv = np.linalg.inv(ic.intrinsic_mat0)
     rot_mat_inv = np.linalg.inv(ic.rot_mat)
 
-    print("rot_mat_" + str(k) + ": ", ic.rot_mat)
-    print("tr_mat_" + str(k) + ": ", ic.tr_mat)
+    # print("rot_mat_" + str(k) + ": ", ic.rot_mat)
+    # print("tr_mat_" + str(k) + ": ", ic.tr_mat)
 
     # projection_matrix = np.zeros([1920, 1080, 2])
     # projection_matrix = np.zeros((1080*1920, 2), dtype=np.uint32)
@@ -237,35 +240,92 @@ def calculate_proj_mat(ic, k, delta = 0):
     else:
         shift = -960
 
-    i = 0
-    # for i in range(0, 1920, 0.1):
-    while(i < 1920):
-        j = 0
-        while(j < 1080):
-        # for j in range(0, 1080, 0.1):
-        #     print(j,i)
-            pt = np.dot(inv, np.array([i, j, 1], dtype=np.float32))
-            pt = np.array([pt[2], -pt[0], -pt[1]]) - ic.tr_mat.T
-            pt = pt[0]
-            pt = np.dot(rot_mat_inv, pt)
-            # projection_matrix[i, j, 0] = (-np.arctan2(pt[1], pt[0]) + delta) * 320 + 960
-            # projection_matrix[i, j, 1] = -pt[2] / (np.sqrt(pt[0] * pt[0] + pt[1] * pt[1])) * 180 + 180
+    tic = time.time()
+    x = np.arange(0, 1920, 0.1)
+    x = [x]
+    x = np.array(np.repeat(x, 10800, axis=0))
+    x = x.reshape(1, x.shape[0] * x.shape[1])
+    # print("x: ", x)
+    # print("x.shape: ", x.shape)
+    y = np.arange(0, 1080, 0.1)
+    y = np.repeat(y, 19200)
+    y = y.reshape(1, y.shape[0])
+    # print("y: ", y)
+    # print("y.shape: ", y.shape)
+    xy = np.zeros((3, 19200 * 10800))
+    xy[0] = x
+    xy[1] = y
+    xy[2] = np.repeat(1, 19200 * 10800)
+    # print("Input mat xy: ", xy)
+    toc = time.time()
+    # print("creation time: ", toc - tic)
 
-            x = (-np.arctan2(pt[1], pt[0]) + delta) * 960 + shift
-            y = -pt[2] / (np.sqrt(pt[0] * pt[0] + pt[1] * pt[1])) * 540 + 540
-            #y = - pt[2] / np.linalg.norm(pt[0:2]) * 540 + 540
-            # print(y,x)
-            x = int(np.clip(round(x), 0, 1919))
-            y = int(np.clip(round(y), 0, 1079))
-            # print(y,x)
-            mapx[y, x] = i
-            mapy[y, x] = j
-            # projection_matrix[1920 * y + x, 0] = j
-            # projection_matrix[1920 * y + x, 1] = i
-            j += 0.3
+    tic = time.time()
+    uvw = np.matmul(inv, xy)
+    uvw = np.array([uvw[2], -uvw[0], -uvw[1]])
+    uvw -= ic.tr_mat
+    res = np.matmul(rot_mat_inv, uvw)
+    toc = time.time()
+    # print("calc time 1: ", toc - tic)
 
-        i += 0.3
-        print("i: ", i)
+    tic = time.time()
+    xs = -np.arctan2(res[1], res[0])# * 560 + shift
+    ys = -res[2]/np.sqrt((np.square(res[0]) + np.square(res[1])))# * 315 + 500
+    print("xs: ", xs)
+    print("ys: ", ys)
+    print("xs max: ", max(xs))
+    print("xs min: ", min(xs))
+    xs = np.clip(xs, 0, 1919)
+    ys = np.clip(ys, 0, 1079)
+    xs = np.around(xs)
+    ys = np.around(ys)
+    xs = xs.astype(np.int32)
+    ys = ys.astype(np.int32)
+    # print("xs: ", xs)
+    # print("ys: ", ys)
+    toc = time.time()
+    # print("calc time 2: ", toc - tic)
+
+    tic = time.time()
+    valsx = np.arange(19200*10800, dtype=np.float32)
+    valsy = np.arange(19200*10800, dtype=np.float32)
+
+    valsx = np.mod(valsx, 19200) / 10
+    valsy = np.floor_divide(valsy, 19200) / 10
+    mapx[ys, xs] = valsx
+    mapy[ys, xs] = valsy
+    toc = time.time()
+    # print("calc time 3: ", toc - tic)
+
+    # i = 0
+    # # for i in range(0, 1920, 0.1):
+    # while(i < 1920):
+    #     j = 0
+    #     while(j < 1080):
+    #     # for j in range(0, 1080, 0.1):
+    #     #     print(j,i)
+    #         pt = np.dot(inv, np.array([i, j, 1], dtype=np.float32))
+    #         pt = np.array([pt[2], -pt[0], -pt[1]]) - ic.tr_mat.T
+    #         pt = pt[0]
+    #         pt = np.dot(rot_mat_inv, pt)
+    #         # projection_matrix[i, j, 0] = (-np.arctan2(pt[1], pt[0]) + delta) * 320 + 960
+    #         # projection_matrix[i, j, 1] = -pt[2] / (np.sqrt(pt[0] * pt[0] + pt[1] * pt[1])) * 180 + 180
+    #
+    #         x = (-np.arctan2(pt[1], pt[0]) + delta) * 640 + shift
+    #         y = -pt[2] / (np.sqrt(pt[0] * pt[0] + pt[1] * pt[1])) * 360 + 360
+    #         #y = - pt[2] / np.linalg.norm(pt[0:2]) * 540 + 540
+    #         # print(y,x)
+    #         x = int(np.clip(round(x), 0, 1919))
+    #         y = int(np.clip(round(y), 0, 1079))
+    #         # print(y,x)
+    #         mapx[y, x] = i
+    #         mapy[y, x] = j
+    #         # projection_matrix[1920 * y + x, 0] = j
+    #         # projection_matrix[1920 * y + x, 1] = i
+    #         j += 0.5
+    #
+    #     i += 0.5
+    #     print("i: ", i)
         # print(i)
             # projection_matrix[i, j, 0] = pt[0]
             # projection_matrix[i, j, 1] = pt[1]
