@@ -17,7 +17,7 @@ import time
 
 INPUT_SIZE_X = 1920
 INPUT_SIZE_Y = 1080
-OUTPUT_SIZE_X = 1920 * 3
+OUTPUT_SIZE_X = 1920 * 2
 OUTPUT_SIZE_Y = 1080
 
 import matplotlib.pyplot as plt
@@ -27,16 +27,16 @@ class image_converter:
   def __init__(self):
     self.bridge = CvBridge()
     self.image_sub0 = rospy.Subscriber("/IMX185_0/image_raw", Image, self.callback0)
-    self.image_sub1 = rospy.Subscriber("/IMX185_1/image_raw", Image, self.callback1)
-    self.image_sub2 = rospy.Subscriber("/IMX185_2/image_raw", Image, self.callback2)
+    # self.image_sub1 = rospy.Subscriber("/IMX185_1/image_raw", Image, self.callback1)
+    # self.image_sub2 = rospy.Subscriber("/IMX185_2/image_raw", Image, self.callback2)
 
     self.camera_info0 = rospy.Subscriber("/IMX185_0/camera_info", CameraInfo, self.camera_info_callback0)
     self.camera_info1 = rospy.Subscriber("/IMX185_1/camera_info", CameraInfo, self.camera_info_callback1)
     self.camera_info2 = rospy.Subscriber("/IMX185_2/camera_info", CameraInfo, self.camera_info_callback2)
 
-    self.res_img0 = np.zeros((OUTPUT_SIZE_Y, OUTPUT_SIZE_X, 3), dtype=np.uint8)
-    self.res_img1 = np.zeros((OUTPUT_SIZE_Y, OUTPUT_SIZE_X, 3), dtype=np.uint8)
-    self.res_img2 = np.zeros((OUTPUT_SIZE_Y, OUTPUT_SIZE_X, 3), dtype=np.uint8)
+    # self.res_img0 = np.zeros((OUTPUT_SIZE_Y, OUTPUT_SIZE_X, 4), dtype=np.uint8)
+    # self.res_img1 = np.zeros((OUTPUT_SIZE_Y, OUTPUT_SIZE_X, 4), dtype=np.uint8)
+    # self.res_img2 = np.zeros((OUTPUT_SIZE_Y, OUTPUT_SIZE_X, 4), dtype=np.uint8)
 
     self.projection_matrix0 = None
 
@@ -68,6 +68,7 @@ class image_converter:
       # tic = time.time()
       self.image0 = self.bridge.imgmsg_to_cv2(data, "bgr8")
       if self.projection_matrix_set:
+        # self.res_img0 = np.zeros((OUTPUT_SIZE_Y, OUTPUT_SIZE_X, 4), dtype=np.uint8)
         # img = self.image0[self.mapy0, self.mapx0].reshape(1080, 1920, 3)
         # self.image0 = self.image0.reshape((1080*1920, 3))
         # self.image0 = self.image0[self.projection_matrix0]
@@ -77,7 +78,10 @@ class image_converter:
         # tic = time.time()
         # print(self.mapx0)
         # print(self.map)
-        self.res_img0 = cv2.remap(self.image0, self.mapx0, self.mapy0, cv2.INTER_LINEAR)
+        # print(self.intrinsic_mat0)
+        # dist_coeffs = np.array([self.dist_coeffs0[0], self.dist_coeffs0[1], self.dist_coeffs0[3], self.dist_coeffs0[4], self.dist_coeffs0[2]])
+        # img = cv2.undistort(self.image0, self.intrinsic_mat0, dist_coeffs)
+        self.res_img0 = cv2.remap(self.image0, self.mapx0, self.mapy0, cv2.INTER_LINEAR, borderMode=cv2.BORDER_TRANSPARENT)
         # toc = time.time()
         # print("time elapsed: ", toc - tic)
         # self.res_img[0:1080, 1920:3840] = res
@@ -88,12 +92,12 @@ class image_converter:
         #     coord = self.projection_matrix0[j, i]
         #     self.res_img[int(coord[1]), int(coord[0])] = self.image0[i, j]
 
-        # cv2.imshow("adf", res)
-        # cv2.waitKey(1)
+        cv2.imshow("adf", self.res_img0)
+        cv2.waitKey(1)
 
-        self.ready0 = True
-        print("img0 is ready!")
-        self.sem0.acquire()
+        # self.ready0 = True
+        # print("img0 is ready!")
+        # self.sem0.acquire()
 
     except CvBridgeError as e:
       print(e)
@@ -104,7 +108,8 @@ class image_converter:
       self.image1 = self.bridge.imgmsg_to_cv2(data, "bgr8")
       if self.projection_matrix_set:
         # tic = time.time()
-        self.res_img1 = cv2.remap(self.image1, self.mapx1, self.mapy1, cv2.INTER_LINEAR)
+        # self.res_img1 = np.zeros((OUTPUT_SIZE_Y, OUTPUT_SIZE_X, 4), dtype=np.uint8)
+        self.res_img1 = cv2.remap(self.image1, self.mapx1, self.mapy1, cv2.INTER_LINEAR, borderMode=cv2.BORDER_TRANSPARENT)
         # toc = time.time()
         # print("time elapsed: ", toc - tic)
         # self.res_img[0:1080, 3840:5760] = res
@@ -114,7 +119,7 @@ class image_converter:
         #     coord = self.projection_matrix1[j, i]
         #     self.res_img[int(coord[1]), int(coord[0])] = self.image1[i, j]
         self.ready1 = True
-        print("img1 is ready!")
+        # print("img1 is ready!")
         self.sem1.acquire()
 
     except CvBridgeError as e:
@@ -126,7 +131,8 @@ class image_converter:
       self.image2 = self.bridge.imgmsg_to_cv2(data, "bgr8")
       if self.projection_matrix_set:
         # tic = time.time()
-        self.res_img2 = cv2.remap(self.image2, self.mapx2, self.mapy2, cv2.INTER_LINEAR)
+        # self.res_img2 = np.zeros((OUTPUT_SIZE_Y, OUTPUT_SIZE_X, 4), dtype=np.uint8)
+        self.res_img2 = cv2.remap(self.image2, self.mapx2, self.mapy2, cv2.INTER_LINEAR, borderMode=cv2.BORDER_TRANSPARENT)
         # toc = time.time()
         # print("time elapsed: ", toc - tic)
         # self.res_img[0:1080, 0:1920] = res
@@ -136,7 +142,7 @@ class image_converter:
         #     coord = self.projection_matrix2[j, i]
         #     self.res_img[int(coord[1]), int(coord[0])] = self.image2[i, j]
         self.ready2 = True
-        print("img2 is ready!")
+        # print("img2 is ready!")
         self.sem2.acquire()
 
     except CvBridgeError as e:
@@ -144,12 +150,16 @@ class image_converter:
     
   def camera_info_callback0(self, data):
       self.intrinsic_mat0 = np.reshape(np.array(data.K), (3, 3))
+      self.dist_coeffs0 = np.array(data.D)
 
   def camera_info_callback1(self, data):
       self.intrinsic_mat1 = np.reshape(np.array(data.K), (3, 3))
+      self.dist_coeffs1 = np.array(data.D)
 
   def camera_info_callback2(self, data):
       self.intrinsic_mat2 = np.reshape(np.array(data.K), (3, 3))
+      self.dist_coeffs2 = np.array(data.D)
+
 
   def set_extr_mat(self, cam_tf):
 
@@ -175,14 +185,12 @@ def main(args):
   # ic.projection_matrix0 = calculate_proj_mat(ic, 0)
   # ic.projection_matrix2 = calculate_proj_mat(ic, 2)
 
-  ic.mapx1, ic.mapy1, border4, _ = calculate_proj_mat(ic, 1)
-  # tic = time.time()
+  tic = time.time()
+  # ic.mapx1, ic.mapy1, border4, _ = calculate_proj_mat(ic, 1)
   ic.mapx0, ic.mapy0, border3, ic.border0 = calculate_proj_mat(ic, 0)
-  print(ic.border0)
-  # toc = time.time()
-  # print("time took: ", toc - tic)
-  ic.mapx2, ic.mapy2, _, ic.border2 = calculate_proj_mat(ic, 2)
-  print(ic.border2)
+  # ic.mapx2, ic.mapy2, _, ic.border2 = calculate_proj_mat(ic, 2)
+  toc = time.time()
+  print("time took: ", toc - tic)
 
   # plt.plot(ic.projection_matrix2[:, 0], ic.projection_matrix2[:, 1], 'bo')
   # plt.plot(ic.projection_matrix0[:, 0], ic.projection_matrix0[:, 1], 'bo')
@@ -203,24 +211,26 @@ def main(args):
         ic.ready0 = False
         ic.ready1 = False
         ic.ready2 = False
-        res_img = np.zeros_like(ic.res_img0)
+        # res_img = np.zeros_like(ic.res_img0)
+        res_img = np.zeros((OUTPUT_SIZE_Y, OUTPUT_SIZE_X, 3), dtype=np.uint8)
         e1 = (ic.border2 + border3)/2
         e2 = (ic.border0 + border4)/2
-        res_img[:, :border3] = ic.res_img2[:, :border3]
-        res_img[:, border3:ic.border2] = ic.res_img2[:, border3:ic.border2] / 2 + ic.res_img0[:, border3:ic.border2] / 2
-        res_img[:, ic.border2:border4] = ic.res_img0[:, ic.border2:border4]
-        res_img[:, border4:ic.border0] = ic.res_img0[:, border4:ic.border0] / 2 + ic.res_img1[:, border4:ic.border0] / 2
-        res_img[:, ic.border0:] = ic.res_img1[:, ic.border0:]
+        # res_img[:, :border3] = ic.res_img2[:, :border3]
+        # res_img[:, border3:ic.border2] = ic.res_img2[:, border3:ic.border2] / 2 + ic.res_img0[:, border3:ic.border2] / 2
+        # res_img[:, ic.border2:border4] = ic.res_img0[:, ic.border2:border4]
+        # res_img[:, border4:ic.border0] = ic.res_img0[:, border4:ic.border0] / 2 + ic.res_img1[:, border4:ic.border0] / 2
+        # res_img[:, ic.border0:] = ic.res_img1[:, ic.border0:]
 
-        # res_img[:, :e1] = ic.res_img2[:, :e1]
-        # res_img[:, e1:e2] = ic.res_img0[:, e1:e2]
-        # res_img[:, e2:] = ic.res_img1[:, e2:]
+        res_img[:, :e1] = ic.res_img2[:, :e1]
+        res_img[:, e1:e2] = ic.res_img0[:, e1:e2]
+        res_img[:, e2:] = ic.res_img1[:, e2:]
+
         # res_img = (ic.res_img0 + ic.res_img1 + ic.res_img2)
         cv2.imshow("Image window", res_img)
         cv2.waitKey(1)
+        ic.sem2.release()
         ic.sem0.release()
         ic.sem1.release()
-        ic.sem2.release()
 
   try:
     rospy.spin()
@@ -244,6 +254,12 @@ def calculate_proj_mat(ic, k, delta = 0):
 
     inv = np.linalg.inv(ic.intrinsic_mat0)
     rot_mat_inv = np.linalg.inv(ic.rot_mat)
+    dist_coeffs = ic.dist_coeffs0
+    dist_coeffs = np.array([ic.dist_coeffs0[0], ic.dist_coeffs0[1], ic.dist_coeffs0[3], ic.dist_coeffs0[4], ic.dist_coeffs0[2]])
+    mapx1, mapy1 = cv2.initUndistortRectifyMap(cameraMatrix=ic.intrinsic_mat0, distCoeffs=dist_coeffs, R=np.eye(3), newCameraMatrix=ic.intrinsic_mat0, size=(INPUT_SIZE_X, INPUT_SIZE_Y), m1type=cv2.CV_32FC1)
+    # print(mapx1)
+    # print(np.eye(3))
+    # asdf
 
     # print("rot_mat_" + str(k) + ": ", ic.rot_mat)
     # print("tr_mat_" + str(k) + ": ", ic.tr_mat)
@@ -308,8 +324,8 @@ def calculate_proj_mat(ic, k, delta = 0):
     ys = np.around(ys)
     xs = xs.astype(np.int32)
     ys = ys.astype(np.int32)
-    print("xs: ", xs)
-    print("ys: ", ys)
+    # print("xs: ", xs)
+    # print("ys: ", ys)
     toc = time.time()
     # print("calc time 2: ", toc - tic)
 
@@ -321,6 +337,11 @@ def calculate_proj_mat(ic, k, delta = 0):
     valsy = np.floor_divide(valsy, INPUT_SIZE_X * 10) / 10
     mapx[ys, xs] = valsx
     mapy[ys, xs] = valsy
+    mapx2 = mapx1[np.clip(np.around(mapx).astype(np.int32), 0, 1079), np.around(mapy).astype(np.int32)]
+    mapy2 = mapy1[np.clip(np.around(mapx).astype(np.int32), 0, 1079), np.around(mapy).astype(np.int32)]
+    # print(mapx2)
+    # print(mapx2.shape)
+    # adsf
     toc = time.time()
     # print("calc time 3: ", toc - tic)
 
@@ -381,7 +402,7 @@ def calculate_proj_mat(ic, k, delta = 0):
 
     print("projection_matrix " + str(k) + " is set!")
     # mapy, mapx = projection_matrix.transpose()
-    return mapx, mapy, xs[0], xs[-1]
+    return mapx2, mapy2, xs[0], xs[-1]
 
 
 def convert_point(x, y, w, h):
